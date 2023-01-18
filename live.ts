@@ -17,11 +17,18 @@ import { createServerTimings } from "$live/utils/timings.ts";
 import { verifyDomain } from "$live/utils/domains.ts";
 import { workbenchHandler } from "$live/utils/workbench.ts";
 import { loadFlags } from "$live/flags.ts";
+import {
+  WorkflowService,
+  postgres,
+} from "https://denopkg.dev/gh/mcandeia/deno-workflows@main/mod.ts";
+import { Handler, noopHandler } from "./handlers/handler.ts";
+import { buildWorkflowRoutesFor } from "./handlers/workflow.ts";
 
 // The global live context
 export type LiveContext = {
   manifest?: DecoManifest;
   deploymentId: string | undefined;
+  workflowService: WorkflowService | undefined;
   isDeploy: boolean;
   domains: string[];
   site: string;
@@ -37,6 +44,7 @@ export const context: LiveContext = {
   domains: ["localhost"],
   site: "",
   siteId: 0,
+  workflowService: undefined,
 };
 declare global {
   var manifest: DecoManifest;
@@ -45,19 +53,45 @@ declare global {
 export const withLive = (liveOptions: LiveOptions) => {
   if (!liveOptions.site) {
     throw new Error(
-      "liveOptions.site is required. It should be the name of the site you created in deco.cx.",
+      "liveOptions.site is required. It should be the name of the site you created in deco.cx."
     );
   }
   if (!liveOptions.siteId) {
     throw new Error(
-      "liveOptions.siteId is required. You can get it from the site URL: https://deco.cx/live/{siteId}",
+      "liveOptions.siteId is required. You can get it from the site URL: https://deco.cx/live/{siteId}"
     );
   }
 
   // Enable InspectVSCode library
-  const inspectPath = liveOptions.inspectPath || "/_live/inspect";
+  const inspectPath = liveOptions.inspectPath ?? "/_live/inspect";
   // Enable Workbench
-  const workbenchPath = liveOptions.workbenchPath || "/_live/workbench";
+  const workbenchPath = liveOptions.workbenchPath ?? "/_live/workbench";
+  // Enable workflows
+  const workflowsPath = liveOptions.workflowsPath ?? "/_live/workflows";
+
+  let [postWorkflowHandlers, getWorkflowHandler]: [
+    Record<string, Handler>,
+    Handler
+  ] = [{}, noopHandler];
+  const workflowAliases = [];
+  // register workflows
+  if (Object.keys(globalThis.manifest.workflows).length > 0) {
+    const workflowService = new WorkflowService(postgres());
+    for (const [_, workflowModule] of Object.entries(
+      globalThis.manifest.workflows
+    )) {
+      const alias = workflowModule.default.name;
+      workflowAliases.push(alias);
+      workflowService.registerWorkflow(workflowModule.default, alias);
+    }
+    workflowService.startWorkers();
+    context.workflowService = workflowService;
+    [postWorkflowHandlers, getWorkflowHandler] = buildWorkflowRoutesFor(
+      workflowService,
+      workflowsPath,
+      workflowAliases
+    );
+  }
 
   context.site = liveOptions.site;
   context.siteId = liveOptions.siteId;
@@ -66,21 +100,21 @@ export const withLive = (liveOptions: LiveOptions) => {
     `${liveOptions.site}.deco.page`,
     `${liveOptions.site}.deco.site`,
     `deco-pages-${liveOptions.site}.deno.dev`,
-    `deco-sites-${liveOptions.site}.deno.dev`,
+    `deco-sites-${liveOptions.site}.deno.dev`
   );
   liveOptions.domains?.forEach((domain) => context.domains.push(domain));
   // Support deploy preview domains
   if (context.deploymentId !== undefined) {
     context.domains.push(
-      `deco-pages-${context.site}-${context.deploymentId}.deno.dev`,
+      `deco-pages-${context.site}-${context.deploymentId}.deno.dev`
     );
     context.domains.push(
-      `deco-sites-${context.site}-${context.deploymentId}.deno.dev`,
+      `deco-sites-${context.site}-${context.deploymentId}.deno.dev`
     );
   }
 
   console.log(
-    `Starting live middleware: siteId=${context.siteId} site=${context.site}`,
+    `Starting live middleware: siteId=${context.siteId} site=${context.site}`
   );
 
   return async (req: Request, ctx: MiddlewareHandlerContext<LiveState>) => {
@@ -117,6 +151,16 @@ export const withLive = (liveOptions: LiveOptions) => {
       return workbenchHandler();
     }
 
+    if (url.pathname.startsWith(workflowsPath)) {
+      if (req.method === "GET") {
+        return await getWorkflowHandler(req, ctx);
+      }
+      const handler = postWorkflowHandlers[url.pathname];
+      if (typeof handler === "function") {
+        return await handler(req, ctx);
+      }
+    }
+
     // Allow introspection of page by editor
     if (url.searchParams.has("editorData")) {
       const pageId = url.searchParams.get("pageId");
@@ -148,7 +192,7 @@ export const withLive = (liveOptions: LiveOptions) => {
           url,
           pageId: ctx.state.page?.id,
           begin,
-        }),
+        })
       );
     }
 
@@ -158,7 +202,7 @@ export const withLive = (liveOptions: LiveOptions) => {
 
 export const getLivePageData = async <Data>(
   req: Request,
-  ctx: HandlerContext<Data, LiveState>,
+  ctx: HandlerContext<Data, LiveState>
 ) => {
   const flags = await loadFlags(req, ctx);
 
@@ -173,7 +217,7 @@ export const getLivePageData = async <Data>(
 
       return acc;
     },
-    { selectedPageIds: [] } as PageOptions,
+    { selectedPageIds: [] } as PageOptions
   );
 
   return {

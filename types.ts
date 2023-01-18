@@ -6,6 +6,7 @@ import {
   EffectFunction,
   LoaderFunction,
   MatchFunction,
+  WorkflowFunction,
 } from "$live/std/types.ts";
 
 export interface Node {
@@ -25,10 +26,15 @@ export interface FunctionModule {
   default: LoaderFunction<any, any> | MatchFunction | EffectFunction;
 }
 
+export interface WorkflowModule {
+  default: WorkflowFunction;
+}
+
 export interface DecoManifest extends Manifest {
   islands: Record<string, Module>;
   sections: Record<string, Module>;
   functions: Record<string, FunctionModule>;
+  workflows: Record<string, WorkflowModule>;
   schemas: Record<
     string,
     { inputSchema: JSONSchema7 | null; outputSchema: JSONSchema7 | null }
@@ -51,6 +57,7 @@ export interface LiveOptions {
   domains?: string[];
   inspectPath?: string;
   workbenchPath?: string;
+  workflowsPath?: string;
 }
 
 export interface PageSection {
@@ -139,10 +146,8 @@ export interface WithSchema {
 export type AvailableSection = Omit<PageSection, "uniqueId"> & WithSchema;
 // We re-add the uniqueId here to allow user to select functions that were already
 // added in the page
-export type AvailableFunction =
-  & Omit<PageFunction, "uniqueId">
-  & WithSchema
-  & { uniqueId?: string };
+export type AvailableFunction = Omit<PageFunction, "uniqueId"> &
+  WithSchema & { uniqueId?: string };
 
 export interface EditorData {
   pageName: string;
