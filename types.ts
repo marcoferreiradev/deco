@@ -8,6 +8,7 @@ import {
   MatchFunction,
   WorkflowFunction,
 } from "$live/std/types.ts";
+import { WorkflowService } from "../deno-workflows/mod.ts";
 
 export interface Node {
   label: string;
@@ -27,7 +28,7 @@ export interface FunctionModule {
 }
 
 export interface WorkflowModule {
-  default: WorkflowFunction;
+  default: WorkflowFunction<any, any, any>;
 }
 
 export interface DecoManifest extends Manifest {
@@ -163,4 +164,5 @@ export type LiveState = {
   site: Site;
   flags: Flags;
   t: Omit<ReturnType<typeof createServerTimings>, "printTimings">;
+  workflows: WorkflowService
 };

@@ -17,12 +17,10 @@ import { createServerTimings } from "$live/utils/timings.ts";
 import { verifyDomain } from "$live/utils/domains.ts";
 import { workbenchHandler } from "$live/utils/workbench.ts";
 import { loadFlags } from "$live/flags.ts";
-import {
-  WorkflowService,
-  postgres,
-} from "https://denopkg.dev/gh/mcandeia/deno-workflows@main/mod.ts";
+import { WorkflowService, postgres } from "$workflows/mod.ts";
 import { Handler, noopHandler } from "./handlers/handler.ts";
-import { buildWorkflowRoutesFor } from "./handlers/workflow.ts";
+import { workflowRoutes } from "./handlers/workflow.ts";
+import { once } from "./utils/sync.ts";
 
 // The global live context
 export type LiveContext = {
@@ -69,30 +67,6 @@ export const withLive = (liveOptions: LiveOptions) => {
   // Enable workflows
   const workflowsPath = liveOptions.workflowsPath ?? "/_live/workflows";
 
-  let [postWorkflowHandlers, getWorkflowHandler]: [
-    Record<string, Handler>,
-    Handler
-  ] = [{}, noopHandler];
-  const workflowAliases = [];
-  // register workflows
-  if (Object.keys(globalThis.manifest.workflows).length > 0) {
-    const workflowService = new WorkflowService(postgres());
-    for (const [_, workflowModule] of Object.entries(
-      globalThis.manifest.workflows
-    )) {
-      const alias = workflowModule.default.name;
-      workflowAliases.push(alias);
-      workflowService.registerWorkflow(workflowModule.default, alias);
-    }
-    workflowService.startWorkers();
-    context.workflowService = workflowService;
-    [postWorkflowHandlers, getWorkflowHandler] = buildWorkflowRoutesFor(
-      workflowService,
-      workflowsPath,
-      workflowAliases
-    );
-  }
-
   context.site = liveOptions.site;
   context.siteId = liveOptions.siteId;
   context.loginUrl = liveOptions.loginUrl;
@@ -117,10 +91,35 @@ export const withLive = (liveOptions: LiveOptions) => {
     `Starting live middleware: siteId=${context.siteId} site=${context.site}`
   );
 
+  let workflows: Handler = noopHandler;
+
+  const buildHandlersOnce = once(() => {
+    if (context?.manifest === undefined) {
+      return;
+    }
+    // register workflows
+    if (Object.keys(context.manifest.workflows).length > 0) {
+      const workflowAliases = [];
+      const workflowService = new WorkflowService(postgres());
+      for (const [_, workflowModule] of Object.entries(
+        context.manifest.workflows
+      )) {
+        const alias = workflowModule.default.name;
+        workflowAliases.push(alias);
+        workflowService.registerWorkflow(workflowModule.default, alias);
+      }
+      workflowService.startWorkers();
+      context.workflowService = workflowService;
+      workflows = workflowRoutes(workflowsPath, workflowService) as Handler;
+    }
+  });
+
   return async (req: Request, ctx: MiddlewareHandlerContext<LiveState>) => {
     if (!context.manifest) {
       context.manifest = globalThis.manifest;
     }
+    await buildHandlersOnce();
+    ctx.state.workflows = context.workflowService!;
     ctx.state.site = {
       id: context.siteId,
       name: context.site,
@@ -152,13 +151,7 @@ export const withLive = (liveOptions: LiveOptions) => {
     }
 
     if (url.pathname.startsWith(workflowsPath)) {
-      if (req.method === "GET") {
-        return await getWorkflowHandler(req, ctx);
-      }
-      const handler = postWorkflowHandlers[url.pathname];
-      if (typeof handler === "function") {
-        return await handler(req, ctx);
-      }
+      return workflows(req, ctx);
     }
 
     // Allow introspection of page by editor
@@ -226,14 +219,19 @@ export const getLivePageData = async <Data>(
   };
 };
 
+const serve = async (
+  req: Request,
+  ctx: HandlerContext<LivePageData, LiveState>
+) => {
+  const { page, flags } = await getLivePageData(req, ctx);
+
+  if (!page) {
+    return ctx.renderNotFound();
+  }
+
+  return ctx.render({ page, flags });
+};
 export const live: () => Handlers<LivePageData, LiveState> = () => ({
-  GET: async (req, ctx) => {
-    const { page, flags } = await getLivePageData(req, ctx);
-
-    if (!page) {
-      return ctx.renderNotFound();
-    }
-
-    return ctx.render({ page, flags });
-  },
+  GET: serve,
+  POST: serve,
 });
