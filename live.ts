@@ -1,32 +1,30 @@
-import { PageOptions } from "./pages.ts";
 import {
   HandlerContext,
   Handlers,
   MiddlewareHandlerContext,
 } from "$fresh/server.ts";
-import { inspectHandler } from "https://deno.land/x/inspect_vscode@0.2.0/mod.ts";
+import { loadFlags } from "$live/flags.ts";
+import { generateEditorData, isPageOptions, loadPage } from "$live/pages.ts";
 import {
   DecoManifest,
   LiveOptions,
   LivePageData,
   LiveState,
 } from "$live/types.ts";
-import { generateEditorData, isPageOptions, loadPage } from "$live/pages.ts";
+import { verifyDomain } from "$live/utils/domains.ts";
 import { formatLog } from "$live/utils/log.ts";
 import { createServerTimings } from "$live/utils/timings.ts";
-import { verifyDomain } from "$live/utils/domains.ts";
 import { workbenchHandler } from "$live/utils/workbench.ts";
-import { loadFlags } from "$live/flags.ts";
-import { WorkflowService, postgres } from "$workflows/mod.ts";
-import { Handler, noopHandler } from "./handlers/handler.ts";
-import { workflowRoutes } from "./handlers/workflow.ts";
+import { inspectHandler } from "https://deno.land/x/inspect_vscode@0.2.0/mod.ts";
+import { noopHandler } from "./handlers/handler.ts";
+import { workflowsRoutes } from "./handlers/workflow.ts";
+import { PageOptions } from "./pages.ts";
 import { once } from "./utils/sync.ts";
 
 // The global live context
 export type LiveContext = {
   manifest?: DecoManifest;
   deploymentId: string | undefined;
-  workflowService: WorkflowService | undefined;
   isDeploy: boolean;
   domains: string[];
   site: string;
@@ -42,7 +40,6 @@ export const context: LiveContext = {
   domains: ["localhost"],
   site: "",
   siteId: 0,
-  workflowService: undefined,
 };
 declare global {
   var manifest: DecoManifest;
@@ -51,12 +48,12 @@ declare global {
 export const withLive = (liveOptions: LiveOptions) => {
   if (!liveOptions.site) {
     throw new Error(
-      "liveOptions.site is required. It should be the name of the site you created in deco.cx."
+      "liveOptions.site is required. It should be the name of the site you created in deco.cx.",
     );
   }
   if (!liveOptions.siteId) {
     throw new Error(
-      "liveOptions.siteId is required. You can get it from the site URL: https://deco.cx/live/{siteId}"
+      "liveOptions.siteId is required. You can get it from the site URL: https://deco.cx/live/{siteId}",
     );
   }
 
@@ -74,43 +71,36 @@ export const withLive = (liveOptions: LiveOptions) => {
     `${liveOptions.site}.deco.page`,
     `${liveOptions.site}.deco.site`,
     `deco-pages-${liveOptions.site}.deno.dev`,
-    `deco-sites-${liveOptions.site}.deno.dev`
+    `deco-sites-${liveOptions.site}.deno.dev`,
   );
   liveOptions.domains?.forEach((domain) => context.domains.push(domain));
   // Support deploy preview domains
   if (context.deploymentId !== undefined) {
     context.domains.push(
-      `deco-pages-${context.site}-${context.deploymentId}.deno.dev`
+      `deco-pages-${context.site}-${context.deploymentId}.deno.dev`,
     );
     context.domains.push(
-      `deco-sites-${context.site}-${context.deploymentId}.deno.dev`
+      `deco-sites-${context.site}-${context.deploymentId}.deno.dev`,
     );
   }
 
   console.log(
-    `Starting live middleware: siteId=${context.siteId} site=${context.site}`
+    `Starting live middleware: siteId=${context.siteId} site=${context.site}`,
   );
 
-  let workflows: Handler = noopHandler;
+  let workflows = noopHandler;
 
-  const buildHandlersOnce = once(() => {
+  const buildHandlersOnce = once(async () => {
     if (context?.manifest === undefined) {
       return;
     }
     // register workflows
     if (Object.keys(context.manifest.workflows).length > 0) {
-      const workflowAliases = [];
-      const workflowService = new WorkflowService(postgres());
-      for (const [_, workflowModule] of Object.entries(
-        context.manifest.workflows
-      )) {
-        const alias = workflowModule.default.name;
-        workflowAliases.push(alias);
-        workflowService.registerWorkflow(workflowModule.default, alias);
-      }
-      workflowService.startWorkers();
-      context.workflowService = workflowService;
-      workflows = workflowRoutes(workflowsPath, workflowService) as Handler;
+      workflows = await workflowsRoutes(
+        "https://durable-workers.fly.dev/",
+        workflowsPath,
+        context.manifest.workflows,
+      );
     }
   });
 
@@ -119,7 +109,6 @@ export const withLive = (liveOptions: LiveOptions) => {
       context.manifest = globalThis.manifest;
     }
     await buildHandlersOnce();
-    ctx.state.workflows = context.workflowService!;
     ctx.state.site = {
       id: context.siteId,
       name: context.site,
@@ -185,7 +174,7 @@ export const withLive = (liveOptions: LiveOptions) => {
           url,
           pageId: ctx.state.page?.id,
           begin,
-        })
+        }),
       );
     }
 
@@ -195,7 +184,7 @@ export const withLive = (liveOptions: LiveOptions) => {
 
 export const getLivePageData = async <Data>(
   req: Request,
-  ctx: HandlerContext<Data, LiveState>
+  ctx: HandlerContext<Data, LiveState>,
 ) => {
   const flags = await loadFlags(req, ctx);
 
@@ -210,7 +199,7 @@ export const getLivePageData = async <Data>(
 
       return acc;
     },
-    { selectedPageIds: [] } as PageOptions
+    { selectedPageIds: [] } as PageOptions,
   );
 
   return {
@@ -221,7 +210,7 @@ export const getLivePageData = async <Data>(
 
 const serve = async (
   req: Request,
-  ctx: HandlerContext<LivePageData, LiveState>
+  ctx: HandlerContext<LivePageData, LiveState>,
 ) => {
   const { page, flags } = await getLivePageData(req, ctx);
 

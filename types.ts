@@ -8,7 +8,6 @@ import {
   MatchFunction,
   WorkflowFunction,
 } from "$live/std/types.ts";
-import { WorkflowService } from "../deno-workflows/mod.ts";
 
 export interface Node {
   label: string;
@@ -147,8 +146,10 @@ export interface WithSchema {
 export type AvailableSection = Omit<PageSection, "uniqueId"> & WithSchema;
 // We re-add the uniqueId here to allow user to select functions that were already
 // added in the page
-export type AvailableFunction = Omit<PageFunction, "uniqueId"> &
-  WithSchema & { uniqueId?: string };
+export type AvailableFunction =
+  & Omit<PageFunction, "uniqueId">
+  & WithSchema
+  & { uniqueId?: string };
 
 export interface EditorData {
   pageName: string;
@@ -164,5 +165,4 @@ export type LiveState = {
   site: Site;
   flags: Flags;
   t: Omit<ReturnType<typeof createServerTimings>, "printTimings">;
-  workflows: WorkflowService
 };

@@ -5,7 +5,7 @@ import { Lock } from "https://deno.land/x/async@v1.2.0/mod.ts";
  * @param f the desired function to run only once
  * @returns the once function.
  */
-export const once = (f: () => void): (() => Promise<void>) => {
+export const once = (f: () => Promise<void>): () => Promise<void> => {
   let ran = false;
   const mu = new Lock();
   return async () => {
@@ -18,7 +18,7 @@ export const once = (f: () => void): (() => Promise<void>) => {
       return;
     }
     ran = true;
-    f();
+    await f();
     mu.release();
   };
 };

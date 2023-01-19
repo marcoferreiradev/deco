@@ -1,61 +1,40 @@
-import { WorkflowService } from "$workflows/mod.ts";
-import { Handler, MethodHandler } from "./handler.ts";
+import { Workflow, workflowHTTPHandler } from "$workflows/mod.ts";
+import { Routes } from "https://deno.land/x/rutt@0.0.13/mod.ts";
+import { Handler, router } from "https://deno.land/x/rutt@0.0.14/mod.ts";
+import { WorkflowModule } from "../types.ts";
 
-const startWorkflowHandler = (svc: WorkflowService): MethodHandler => {
-  return async (req, { params: { alias } }) => {
-    const { props, input } = await req.json();
-    return Response.json(await svc.startWorkflow({ alias }, [props, input]));
-  };
-};
-
-const workflowGetHandler =
-  (svc: WorkflowService): MethodHandler =>
-  async (_, { params: { id } }) => {
-    return Response.json(await svc.runWorkflow(id));
-  };
-
-const signalWorkflowHandler =
-  (svc: WorkflowService): MethodHandler =>
-  async (req, { params: { id, signal } }) => {
-    await svc.signalWorkflow(id, signal, await req.json());
-    return Response.json({
-      message: "signal received",
-    });
-  };
-
-type HTTPVerb = "POST" | "GET";
-const handlers = (
-  base: string,
-  svc: WorkflowService
-): Record<string, Partial<Record<HTTPVerb, MethodHandler>>> => ({
-  [`${base}/:alias`]: {
-    POST: startWorkflowHandler(svc),
-  },
-  [`${base}/:alias/:id`]: {
-    GET: workflowGetHandler(svc),
-  },
-  [`${base}/:alias/:id/signals/:signal`]: {
-    POST: signalWorkflowHandler(svc),
-  },
+const routesFor = (
+  route: string,
+  workflow: Workflow,
+): Routes => ({
+  [`POST@${route}`]: workflowHTTPHandler(workflow),
 });
 
-export const workflowRoutes = (base: string, svc: WorkflowService): Handler => {
-  const builtHandlers = handlers(base, svc);
-  return (req, ctx): Promise<Response> => {
-    for (const [route, handler] of Object.entries(builtHandlers)) {
-      const pattern = new URLPattern({ pathname: route });
-      if (pattern.test(req.url)) {
-        const optsParams = pattern.exec(req.url);
-        const methodHandler = handler[req.method as HTTPVerb];
-        if (methodHandler !== undefined) {
-          return methodHandler(
-            req,
-            { params: optsParams?.pathname.groups! },
-            ctx
-          );
-        }
-      }
-    }
-    return Promise.resolve(Response.json({}));
-  };
+export type Workflows = Record<string, WorkflowModule>;
+export const workflowsRoutes = async (
+  workflowsAPIAddr: string,
+  base: string,
+  workflows: Workflows,
+): Promise<Handler> => {
+  let routes: Routes = {};
+  const routePaths: { path: string; alias: string }[] = [];
+  for (const [_, workflow] of Object.entries(workflows)) {
+    const alias = workflow.default.name;
+    const path = `${base}/${alias}`;
+    routes = {
+      ...routes,
+      ...routesFor(path, workflow.default),
+    };
+    routePaths.push({ path, alias });
+  }
+  await Promise.all(routePaths.map(({ path, alias }) => {
+    fetch(`${workflowsAPIAddr}/workflows/${alias}`, {
+      method: "PUT",
+      body: JSON.stringify({
+        url: `http://localhost:8000${path}`,
+        type: "http",
+      }),
+    });
+  }));
+  return router(routes);
 };
