@@ -161,6 +161,16 @@ export type ComponentFunc<
   TReturn extends JSX.Element | null = JSX.Element | null,
 > = (props: TProps) => TReturn;
 
+export type AsyncComponentFunc<
+  TProps = any,
+  TContext = any,
+  TReturn extends JSX.Element | null = JSX.Element | null,
+> = (
+  props: TProps,
+  req: Request,
+  ctx: TContext,
+) => PromiseOrValue<() => TReturn>;
+
 export interface ComponentMetadata {
   id?: string;
   resolveChain: string[];

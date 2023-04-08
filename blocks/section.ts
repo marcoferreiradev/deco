@@ -2,81 +2,84 @@
 import { HttpContext } from "$live/blocks/handler.ts";
 import StubSection from "$live/components/StubSection.tsx";
 import {
+  AsyncComponentFunc,
   Block,
   BlockModule,
   ComponentFunc,
   InstanceOf,
   PreactComponent,
 } from "$live/engine/block.ts";
-import { BaseContext, Resolver } from "$live/engine/core/resolver.ts";
-import { LoaderContext } from "$live/types.ts";
+import {
+  AsyncResolver,
+  BaseContext,
+  Resolver,
+} from "$live/engine/core/resolver.ts";
+import { StatefulContext } from "$live/types.ts";
 import { JSX } from "preact";
-import { PropsLoader, propsResolver } from "./propsResolver.ts";
+import { PromiseOrValue } from "../engine/core/utils.ts";
+
+const isAsyncComponent = <TProps = any>(
+  f: ComponentFunc<TProps> | AsyncComponentFunc<TProps>,
+): f is AsyncComponentFunc<TProps> => {
+  return f?.constructor?.name === "AsyncFunction";
+};
 
 export type Section = InstanceOf<typeof sectionBlock, "#/root/sections">;
+// deno-lint-ignore ban-types
+export type SectionContext<TState = {}> = StatefulContext<TState>;
 
-export interface SectionModule<TConfig = any, TProps = any> extends
-  BlockModule<
-    ComponentFunc<TProps>,
-    JSX.Element | null,
-    PreactComponent
-  > {
-  loader?: PropsLoader<TProps, TConfig>;
-}
-
-const componentWith = (
-  resolver: string,
-  componentFunc: ComponentFunc,
-) =>
-<TProps = any>(props: TProps, resolveChain: string[]) => ({
-  Component: componentFunc,
-  props,
-  metadata: {
-    component: resolver,
-    resolveChain,
-    id: resolveChain.length > 0 ? resolveChain[0] : undefined,
-  },
-});
+export type SectionModule<TProps = any> = BlockModule<
+  ComponentFunc<TProps> | AsyncComponentFunc<TProps, SectionContext>,
+  JSX.Element | null | (PromiseOrValue<() => JSX.Element | null>),
+  PreactComponent
+>;
 
 const sectionBlock: Block<SectionModule> = {
   type: "sections",
   introspect: [{
-    loader: ["1", "state.$live"],
-  }, {
-    loader: "1",
-  }, {
     default: "0",
   }],
-  adapt: <TConfig = any, TProps = any>(
-    mod: SectionModule<TConfig, TProps>,
-    resolver: string,
+  adapt: <TProps = any>(
+    mod: SectionModule<TProps>,
+    component: string,
   ):
-    | Resolver<PreactComponent<JSX.Element, TProps>, TProps, BaseContext>
-    | Resolver<
-      PreactComponent<JSX.Element, TProps>,
-      TConfig,
+    | Resolver<PreactComponent<JSX.Element | null, TProps>, TProps, BaseContext>
+    | AsyncResolver<
+      PreactComponent,
+      TProps,
       HttpContext
     > => {
-    const componentFunc = componentWith(resolver, mod.default);
-    const loader = mod.loader;
-    if (!loader) {
-      return (
+    const compFunc = mod.default;
+    if (isAsyncComponent(compFunc)) {
+      return async (
         props: TProps,
-        { resolveChain }: BaseContext,
-      ): PreactComponent<any, TProps> => componentFunc(props, resolveChain);
+        { resolveChain, request, context }: HttpContext,
+      ): Promise<PreactComponent> => {
+        const result = await compFunc(props, request, context);
+        return {
+          Component: result,
+          props: {},
+          metadata: {
+            component,
+            resolveChain,
+            id: resolveChain.length > 0 ? resolveChain[0] : undefined,
+          },
+        };
+      };
     }
-    return async (
-      props: TConfig,
-      { resolveChain, request, context, resolve }: HttpContext,
-    ): Promise<PreactComponent<any, TProps>> => {
-      const ctx = {
-        ...context,
-        state: { ...context.state, $live: props, resolve },
-      } as LoaderContext;
-      return componentFunc(
-        await propsResolver(loader, ctx, request),
-        resolveChain,
-      );
+    return (
+      props: TProps,
+      { resolveChain }: BaseContext,
+    ): PreactComponent<JSX.Element | null, TProps> => {
+      return {
+        Component: compFunc as ComponentFunc,
+        props,
+        metadata: {
+          component,
+          resolveChain,
+          id: resolveChain.length > 0 ? resolveChain[0] : undefined,
+        },
+      };
     };
   },
   defaultDanglingRecover: (_, ctx) => {
