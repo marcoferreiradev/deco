@@ -25,7 +25,9 @@ export const formatLog = (opts: {
   if (context.isDeploy) {
     return `[${
       statusFormatter(`${opts.status}`)
-    }]: ${duration}ms ${opts.url.pathname} ${opts.pageId ? opts.pageId : ""}`;
+    }]: ${duration}ms ${opts.url.pathname} ${
+      opts.pageId ? opts.pageId : ""
+    } mem=${JSON.stringify(Deno.memoryUsage())} uptime=${Deno.osUptime()}`;
   }
 
   return `[${statusFormatter(`${opts.status}`)}]: ${duration}ms ${
