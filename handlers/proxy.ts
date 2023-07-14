@@ -64,7 +64,7 @@ async (req, _ctx) => {
 
   return new Response(response.body, {
     status: response.status,
-    headers: responseHeaders,
+    // headers: responseHeaders,
   });
 };
 
