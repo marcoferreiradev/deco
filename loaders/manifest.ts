@@ -10,6 +10,13 @@ export interface Props {
   files: File[];
 }
 
+const esbuildWasmURL = new URL("./esbuild_v0.17.19.wasm", import.meta.url).href;
+
+await esbuildWasm.initialize({
+  wasmURL: esbuildWasmURL,
+  worker: false,
+});
+
 type BlocksManifest = Omit<DecoManifest, "islands" | "routes" | "baseUrl">;
 export default async function Manifest(
   { files }: Props,
