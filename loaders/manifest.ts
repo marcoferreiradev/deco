@@ -1,5 +1,5 @@
 import { DecoManifest } from "$live/types.ts";
-import * as esbuild from "https://deno.land/x/esbuild@v0.18.13/mod.js";
+import * as esbuildWasm from "https://deno.land/x/esbuild@v0.17.19/wasm.js";
 
 export interface File {
   content: string;
@@ -20,7 +20,7 @@ export default async function Manifest(
     const typeKey = type as keyof BlocksManifest;
     manifest[typeKey] ??= {};
 
-    const result = await esbuild.transform(content, {
+    const result = await esbuildWasm.transform(content, {
       loader: "tsx",
       format: "esm",
       jsx: "automatic",
