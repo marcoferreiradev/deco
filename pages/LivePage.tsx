@@ -198,6 +198,7 @@ export const useLivePageContext = () => useContext(LivePageContext);
 export default function LivePage(
   props: Props,
 ): JSX.Element {
+  console.log("rendering", props)
   const metadata = usePageContext()?.metadata;
   const routerCtx = useRouterContext();
   const pageId = pageIdFromMetadata(metadata);

@@ -188,17 +188,14 @@ const buildRuntime = (
       : recovers,
   ];
 };
-export const $live = <T extends DecoManifest>(
+export const $live = async <T extends DecoManifest>(
   m: T,
   { siteId, namespace }: SiteInfo,
   useLocalStorageOnly = false,
-): T => {
+): Promise<T> => {
   context.siteId = siteId ?? -1;
   context.namespace = namespace;
-  const [newManifest, resolvers, recovers] = (blocks ?? []).reduce(
-    buildRuntime,
-    [m, {}, []] as [DecoManifest, ResolverMap<FreshContext>, DanglingRecover[]],
-  );
+
   context.site = siteName();
   const provider = getComposedConfigStore(
     context.namespace!,
@@ -207,7 +204,43 @@ export const $live = <T extends DecoManifest>(
     useLocalStorageOnly,
   );
   context.release = provider;
-  const resolver = new ReleaseResolver<FreshContext>({
+
+  let [newManifest, resolvers, recovers] = (blocks ?? []).reduce(
+    buildRuntime,
+    [m, {}, []] as [DecoManifest, ResolverMap<FreshContext>, DanglingRecover[]],
+  );
+
+  let resolver = new ReleaseResolver<FreshContext>({
+    resolvers: { ...resolvers, ...defaultResolvers },
+    release: provider,
+    danglingRecover: recovers.length > 0
+      ? buildDanglingRecover(recovers)
+      : undefined,
+  });
+
+  const manifest = await resolver.resolve<DecoManifest>("manifest", {
+    request: new Request("http://localhost:8000"),
+    context: {
+      state: {},
+    } as HandlerContext,
+  }, {
+    nullIfDangling: true,
+  });
+
+  for (const [block, blockModules] of Object.entries(manifest)) {
+    const current = m[block as keyof DecoManifest];
+    m[block as keyof DecoManifest] = {
+      ...(current ?? {}),
+      ...blockModules,
+    };
+  }
+
+  [newManifest, resolvers, recovers] = (blocks ?? []).reduce(
+    buildRuntime,
+    [m, {}, []] as [DecoManifest, ResolverMap<FreshContext>, DanglingRecover[]],
+  );
+
+  resolver = new ReleaseResolver<FreshContext>({
     resolvers: { ...resolvers, ...defaultResolvers },
     release: provider,
     danglingRecover: recovers.length > 0
