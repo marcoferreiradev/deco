@@ -81,16 +81,16 @@ const main = (
       }
     }
 
-    // /* Listen web-vitals */
-    // const webVitals = await import(
-    //   "https://esm.sh/v128/web-vitals@3.1.0/es2022/web-vitals.mjs"
-    // );
+    /* Listen web-vitals */
+    const webVitals = await import(
+      "https://esm.sh/v128/web-vitals@3.1.0/es2022/web-vitals.mjs"
+    );
 
-    // webVitals.onCLS(onWebVitalsReport);
-    // webVitals.onFID(onWebVitalsReport);
-    // webVitals.onLCP(onWebVitalsReport);
-    // webVitals.onFCP(onWebVitalsReport);
-    // webVitals.onTTFB(onWebVitalsReport);
+    webVitals.onCLS(onWebVitalsReport);
+    webVitals.onFID(onWebVitalsReport);
+    webVitals.onLCP(onWebVitalsReport);
+    webVitals.onFCP(onWebVitalsReport);
+    webVitals.onTTFB(onWebVitalsReport);
 
     if (typeof window.jitsu !== "function") {
       return;
@@ -142,10 +142,14 @@ const IS_TESTING_JITSU = false;
 function LiveAnalytics({ id = -1, path = "defined_on_code", flags }: Props) {
   return (
     <>
-      <Script
+      {
+        /*
+        <Script
         type="module"
         dangerouslySetInnerHTML={{ __html: innerHtml({ id, path, flags }) }}
       />
+          */
+      }
 
       {(context.isDeploy || IS_TESTING_JITSU) && ( // Add analytcs in production only
         <Jitsu
