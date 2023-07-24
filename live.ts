@@ -12,6 +12,7 @@ import { Release } from "./engine/releases/provider.ts";
 export type LiveContext = {
   manifest?: DecoManifest;
   deploymentId: string | undefined;
+  region: string | undefined;
   isDeploy: boolean;
   site: string;
   siteId: number;
@@ -27,6 +28,7 @@ export type LiveContext = {
 // we have to deliberately store the manifest in this scope.
 export const context: LiveContext = {
   deploymentId: Deno.env.get("DENO_DEPLOYMENT_ID"),
+  region: Deno.env.get("DENO_REGION"),
   isDeploy: Boolean(Deno.env.get("DENO_DEPLOYMENT_ID")),
   site: "",
   siteId: 0,

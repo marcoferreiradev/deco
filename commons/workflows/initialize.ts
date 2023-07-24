@@ -36,7 +36,7 @@ export const initOnce = () => {
       "https://durable-workers.deco-cx.workers.dev",
     namespace: context.site,
     audience:
-      `urn:deco:site::${context.site}:deployment/${context.deploymentId}`,
+      `urn:deco:site:${context.region}:${context.site}:deployment/${context.deploymentId}`,
     token: Deno.env.get("DURABLE_TOKEN"),
   };
   init(context.isDeploy ? setupRemote : setupLocal);

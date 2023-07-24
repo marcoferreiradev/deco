@@ -45,6 +45,12 @@ export const defaultRoutes: {
 }[] = [
   {
     block: "routes",
+    from: "$live/routes/live/tokens/index.ts",
+    key: "./routes/live/tokens/index.ts",
+    ref: "$live_idp_tokens",
+  },
+  {
+    block: "routes",
     from: "$live/routes/live/workflows/run.ts",
     key: "./routes/live/workflows/run.ts",
     ref: "$live_workflows",
