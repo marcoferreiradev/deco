@@ -13,9 +13,9 @@ export type MultivariateProps<MVariant = Section[]> = MultivariateFlag<
  * @title Variant
  * @label hidden
  */
-export default function MultivariateFlag(
-  props: MultivariateProps<Section[]>,
-): MultivariateFlag<Section[]> {
+export default function MultivariateFlag<T = Section[]>(
+  props: MultivariateProps<T>,
+): MultivariateFlag<T> {
   return props;
 }
 
