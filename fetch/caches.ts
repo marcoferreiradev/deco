@@ -139,7 +139,7 @@ export const kvCacheStorage = (): CacheStorage => {
           return new Response(stream, { headers, status });
         },
         /** [MDN Reference](https://developer.mozilla.org/docs/Web/API/Cache/matchAll) */
-        matchAll: async (
+        matchAll: (
           _request?: RequestInfo | URL,
           _options?: CacheQueryOptions,
         ): Promise<ReadonlyArray<Response>> => {
