@@ -10,6 +10,9 @@ export const createFetch = (fetcher: typeof fetch): typeof fetch =>
     input: string | Request | URL,
     init?: RequestInit,
   ) {
+
+    console.log('here: createFetch')
+
     const start = performance.now();
     const response = await fetcher(input, init);
 

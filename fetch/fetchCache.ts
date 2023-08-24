@@ -39,7 +39,10 @@ const DEFAULT_TTL_BY_STATUS = [
 ] satisfies DecoInit["cacheTtlByStatus"];
 
 const caches = getCacheStorage();
-const cache = await caches?.open("fetch").catch(() => null);
+const cache = await caches?.open("fetch").catch((error) => {
+  console.error(error);
+  return null;
+});
 
 const inFuture = (maybeDate: string) => {
   try {

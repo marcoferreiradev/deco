@@ -202,7 +202,7 @@ export const kvCacheStorage = (): CacheStorage => {
 };
 
 export const getCacheStorage = (): CacheStorage | null => {
-  if (typeof Deno.openKv !== "undefined") {
+  if (typeof Deno.openKv === "function") {
     return kvCacheStorage();
   }
 
