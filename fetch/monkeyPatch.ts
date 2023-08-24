@@ -3,9 +3,13 @@
 import { createFetch as withCache } from "./fetchCache.ts";
 import { createFetch as withLogs } from "./fetchLog.ts";
 
-console.log("monkey patching fetch");
-
-globalThis.fetch = [
+const DecoFetch = [
   withLogs,
   withCache,
 ].reduceRight((acc, curr) => curr(acc), globalThis.fetch);
+
+function fetcher(input: URL | RequestInfo, init?: RequestInit | undefined) {
+  return DecoFetch(input, init);
+}
+
+globalThis.fetch = fetcher;
