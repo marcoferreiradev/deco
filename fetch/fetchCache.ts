@@ -5,7 +5,7 @@
  */
 import { getCacheStorage, sha1 } from "./caches.ts";
 
-const getCacheKey = async (
+const getCacheKey = (
   input: string | Request | URL,
   init?: DecoRequestInit,
 ) => {
@@ -38,9 +38,8 @@ const DEFAULT_TTL_BY_STATUS = [
   { from: 500, to: 599, ttl: 0 },
 ] satisfies DecoInit["cacheTtlByStatus"];
 
-const cache = await getCacheStorage()
-  .then((caches) => caches.open("fetch"))
-  .catch(() => null);
+const caches = getCacheStorage();
+const cache = await caches?.open("fetch").catch(() => null);
 
 const inFuture = (maybeDate: string) => {
   try {

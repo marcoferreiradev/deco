@@ -15,10 +15,9 @@ export const sha1 = async (text: string) => {
   return hex;
 };
 
-export const kvCacheStorage = async (): Promise<CacheStorage> => {
+export const kvCacheStorage = (): CacheStorage => {
   const CHUNK_SIZE = 64_000; // 64Kb
   const NAMESPACE = "CACHES";
-  const kv = await Deno.openKv();
 
   return {
     delete: (_cacheName: string): Promise<boolean> => {
@@ -37,6 +36,8 @@ export const kvCacheStorage = async (): Promise<CacheStorage> => {
       throw new Error("Not Implemented");
     },
     open: async (cacheName: string): Promise<Cache> => {
+      const kv = await Deno.openKv();
+
       const assertNoOptions = (
         { ignoreMethod, ignoreSearch, ignoreVary }: CacheQueryOptions = {},
       ) => {
@@ -200,14 +201,14 @@ export const kvCacheStorage = async (): Promise<CacheStorage> => {
   };
 };
 
-export const getCacheStorage = async (): Promise<CacheStorage> => {
+export const getCacheStorage = (): CacheStorage | null => {
   if (typeof Deno.openKv !== "undefined") {
-    return await kvCacheStorage();
+    return kvCacheStorage();
   }
 
   if (typeof caches !== "undefined") {
     return caches;
   }
 
-  throw new Error("Not Implemented");
+  return null;
 };
