@@ -9,3 +9,4 @@ globalThis.fetch = [
   withLogs,
   withCache,
 ].reduceRight((acc, curr) => curr(acc), globalThis.fetch);
+window.fetch = globalThis.fetch
