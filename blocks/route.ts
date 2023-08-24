@@ -172,10 +172,7 @@ export const buildDecoState = (
     context.state.log(
       formatIncomingRequest(request, liveContext.site),
     );
-
-    if (!liveContext.isDeploy) {
-      setLogger(context.state.log);
-    }
+    setLogger(context.state.log);
 
     const url = new URL(request.url);
     const isEchoRoute = url.pathname.startsWith("/live/_echo"); // echoing
@@ -231,7 +228,6 @@ export const buildDecoState = (
       return resp;
     }
     debug[action](resp);
-    setLogger(null);
 
     return resp;
   };
