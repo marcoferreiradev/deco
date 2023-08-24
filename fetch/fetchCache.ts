@@ -3,7 +3,7 @@
  *
  * Heavily inspired on: https://developers.cloudflare.com/workers/runtime-apis/request/#incomingrequestcfproperties
  */
-import { getCacheStorage } from "./caches.ts";
+import { getCacheStorage, sha1 } from "./caches.ts";
 
 const getCacheKey = async (
   input: string | Request | URL,
@@ -19,18 +19,7 @@ const getCacheKey = async (
     init?.headers || (input instanceof Request ? input.headers : undefined),
   );
 
-  const buffer = await crypto.subtle.digest(
-    "SHA-1",
-    new TextEncoder().encode(
-      `url:${url},headers:${JSON.stringify([...headers.entries()])}`,
-    ),
-  );
-
-  const hex = Array.from(new Uint8Array(buffer))
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("");
-
-  return hex;
+  return sha1(`url:${url},headers:${JSON.stringify([...headers.entries()])}`);
 };
 
 type CachingMode = "stale-while-revalidate";
@@ -92,13 +81,12 @@ export const createFetch = (fetcher: typeof fetch): typeof fetch =>
       )?.ttl ?? 0;
 
       if (cacheable && maxAge > 0) {
-        const cached = new Response(response.body, response);
-
-        cached.headers.set(
+        const cloned = new Response(response.clone().body, response);
+        cloned.headers.set(
           "expires",
           new Date(Date.now() + (maxAge * 1e3)).toUTCString(),
         );
-        cache?.put(request, cached.clone());
+        cache?.put(request, cloned).catch(console.error);
       }
 
       return response;

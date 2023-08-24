@@ -1,7 +1,7 @@
 /** Monkey patch fetch */
 
-import { createFetch as withCache } from "./fetch_cache.ts";
-import { createFetch as withLogs } from "./fetch_log.ts";
+import { createFetch as withCache } from "./fetchCache.ts";
+import { createFetch as withLogs } from "./fetchLog.ts";
 
 globalThis.fetch = [
   withCache,

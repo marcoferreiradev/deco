@@ -1,9 +1,10 @@
 // deno-lint-ignore-file no-explicit-any
-import { setLogger } from "$live/fetch/fetch_log.ts";
+import { setLogger } from "$live/fetch/fetchLog.ts";
 import { METHODS } from "https://deno.land/x/rutt@0.0.13/mod.ts";
 import { InvocationFunc } from "../clients/withManifest.ts";
 import {
   FreshHandler as Handler,
+  getCookies,
   HandlerContext,
   Handlers,
   MiddlewareHandler,
@@ -12,7 +13,6 @@ import {
   PageProps,
   RouteConfig,
   RouteModule,
-  getCookies,
   setCookie,
 } from "../deps.ts";
 import { Block, BlockModule, ComponentFunc } from "../engine/block.ts";
