@@ -228,6 +228,7 @@ export const buildDecoState = (
       return resp;
     }
     debug[action](resp);
+    setLogger(null)
 
     return resp;
   };
