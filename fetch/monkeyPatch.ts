@@ -13,3 +13,5 @@ function fetcher(input: URL | RequestInfo, init?: RequestInit | undefined) {
 }
 
 globalThis.fetch = fetcher;
+window.fetch = fetcher;
+self.fetch = fetcher;
