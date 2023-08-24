@@ -99,12 +99,7 @@ export const createFetch = (fetcher: typeof fetch): typeof fetch =>
     if (!matched) {
       const fetched = await fetchAndCache();
 
-      // fixme: Somehow, Deno bugs when tempering with ReadableStream.
-      if (fetched.body instanceof ReadableStream) {
-        return fetched;
-      }
-
-      const response = new Response(fetched.body, fetched);
+      const response = new Response(fetched.clone().body, fetched);
       response.headers.set("x-cache", cacheable ? "MISS" : "DYNAMIC");
       return response;
     }
