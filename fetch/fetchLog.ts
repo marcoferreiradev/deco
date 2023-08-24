@@ -13,6 +13,12 @@ export const createFetch = (fetcher: typeof fetch): typeof fetch =>
     const start = performance.now();
     const response = await fetcher(input, init);
 
+    console.log(formatOutgoingFetch(
+      new Request(input, init),
+      response,
+      performance.now() - start,
+    ));
+
     logger?.(
       formatOutgoingFetch(
         new Request(input, init),
