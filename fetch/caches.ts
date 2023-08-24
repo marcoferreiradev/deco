@@ -18,7 +18,7 @@ export const sha1 = async (text: string) => {
 export const kvCacheStorage = async (): Promise<CacheStorage> => {
   const CHUNK_SIZE = 64_000; // 64Kb
   const NAMESPACE = "CACHES";
-  const kv = await Deno.openKv("test.sql");
+  const kv = await Deno.openKv();
 
   return {
     delete: (_cacheName: string): Promise<boolean> => {
