@@ -16,8 +16,8 @@ export const sha1 = async (text: string) => {
 };
 
 export const kvCacheStorage = (): CacheStorage => {
-  const CHUNK_SIZE = 64_000; // 64Kb
-  const NAMESPACE = "CACHES";
+  const CHUNK_SIZE = 65536; // 64Kb
+  const NAMESPACE = "CACHES-2";
 
   return {
     delete: (_cacheName: string): Promise<boolean> => {
@@ -102,7 +102,14 @@ export const kvCacheStorage = (): CacheStorage => {
           assertNoOptions(options);
 
           const key = await keyForRequest(request);
+
+          const start = performance.now();
           const entry = await kv.get<KVData>(key, { consistency: "eventual" });
+          console.log(
+            `${request instanceof Request ? request.url : request}: ${
+              (performance.now() - start).toFixed(0)
+            }ms`,
+          );
 
           if (!entry.value) return;
 
@@ -113,6 +120,7 @@ export const kvCacheStorage = (): CacheStorage => {
               try {
                 const batchSize = 10;
 
+                const start = performance.now();
                 for (let it = 0; it < chunks; it += batchSize) {
                   const keys = new Array(batchSize)
                     .fill(0)
@@ -128,6 +136,9 @@ export const kvCacheStorage = (): CacheStorage => {
                     controller.enqueue(value as Uint8Array);
                   }
                 }
+                console.log(
+                  `${request instanceof Request ? request.url : request}: Many: ${(performance.now() - start).toFixed(0)}ms`,
+                );
 
                 controller.close();
               } catch (error) {
@@ -168,9 +179,40 @@ export const kvCacheStorage = (): CacheStorage => {
           const key = await keyForRequest(req);
 
           let chunk = 0;
-          const reader = response.body?.getReader();
+
+          const reader = new ReadableStream({
+            start: async (controller) => {
+              const reader = response.body?.getReader();
+
+              if (!reader) {
+                controller.close();
+
+                return;
+              }
+
+              let acc = new Uint8Array();
+              while (true) {
+                const { value, done } = await reader.read();
+
+                if (value && acc.byteLength + value.byteLength > CHUNK_SIZE) {
+                  controller.enqueue(acc);
+
+                  acc = new Uint8Array(value);
+                } else if (value) {
+                  acc = new Uint8Array([...acc, ...value]);
+                }
+
+                if (done) {
+                  if (acc.byteLength > 0) controller.enqueue(acc);
+
+                  return controller.close();
+                }
+              }
+            },
+          }).getReader();
+
           if (reader) {
-            for (chunk = 0; true;) {
+            while (true) {
               const { value, done } = await reader.read();
 
               if (value) {
