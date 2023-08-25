@@ -137,7 +137,11 @@ export const kvCacheStorage = (): CacheStorage => {
                   }
                 }
                 console.log(
-                  `${request instanceof Request ? request.url : request}: Many: ${(performance.now() - start).toFixed(0)}ms`,
+                  `${
+                    request instanceof Request ? request.url : request
+                  }: Many chunks:${chunks}: ${
+                    (performance.now() - start).toFixed(0)
+                  }ms`,
                 );
 
                 controller.close();
