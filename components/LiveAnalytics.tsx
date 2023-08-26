@@ -1,7 +1,5 @@
 /** @jsxImportSource preact */
 
-import Script from "partytown/Script.tsx";
-import Jitsu from "partytown/integrations/Jitsu.tsx";
 import { context } from "../live.ts";
 import { Flag } from "../types.ts";
 
@@ -117,17 +115,10 @@ const IS_TESTING_JITSU = false;
 function LiveAnalytics({ id = -1, path = "defined_on_code", flags }: Props) {
   return (
     <>
-      <Script
+      <script
         type="module"
         dangerouslySetInnerHTML={{ __html: innerHtml({ id, path, flags }) }}
       />
-
-      {(context.isDeploy || IS_TESTING_JITSU) && ( // Add analytcs in production only
-        <Jitsu
-          data-init-only="true"
-          data-key="js.9wshjdbktbdeqmh282l0th.c354uin379su270joldy2"
-        />
-      )}
     </>
   );
 }
