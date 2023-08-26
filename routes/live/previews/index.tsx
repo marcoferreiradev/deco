@@ -1,3 +1,5 @@
+/** @jsxImportSource preact */
+
 import { PageProps } from "$fresh/server.ts";
 import { Page } from "../../../blocks/page.ts";
 import LiveControls from "../../../components/LiveControls.tsx";
