@@ -1,3 +1,5 @@
+/** @jsxImportSource preact */
+
 import Script from "partytown/Script.tsx";
 import Jitsu from "partytown/integrations/Jitsu.tsx";
 import { context } from "../live.ts";
