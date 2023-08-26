@@ -1,3 +1,5 @@
+/** @jsxImportSource preact */
+
 import { Page } from "../blocks/page.ts";
 import { notUndefined } from "../engine/core/utils.ts";
 

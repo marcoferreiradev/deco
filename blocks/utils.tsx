@@ -1,3 +1,5 @@
+/** @jsxImportSource preact */
+
 // deno-lint-ignore-file no-explicit-any
 import type { AppManifest, SourceMap } from "../blocks/app.ts";
 import type { InvocationFunc } from "../clients/withManifest.ts";

@@ -1,3 +1,5 @@
+/** @jsxImportSource preact */
+
 import { isSection, Section } from "../blocks/section.ts";
 
 export type WellKnownSlots =

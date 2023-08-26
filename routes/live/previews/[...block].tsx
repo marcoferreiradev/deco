@@ -1,3 +1,5 @@
+/** @jsxImportSource preact */
+
 import { HandlerContext, PageProps } from "$fresh/server.ts";
 import { Page } from "../../../blocks/page.ts";
 import LiveAnalytics from "../../../components/LiveAnalytics.tsx";
