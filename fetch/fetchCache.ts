@@ -3,7 +3,8 @@
  *
  * Heavily inspired on: https://developers.cloudflare.com/workers/runtime-apis/request/#incomingrequestcfproperties
  */
-import { getCacheStorage, sha1 } from "./caches.ts";
+import { getCacheStorage } from "./caches/mod.ts";
+import { sha1 } from "./caches/utils.ts";
 
 const getCacheKey = (
   input: string | Request | URL,
@@ -39,10 +40,7 @@ const DEFAULT_TTL_BY_STATUS = [
 ] satisfies DecoInit["cacheTtlByStatus"];
 
 const caches = getCacheStorage();
-const cache = await caches?.open("fetch").catch((error) => {
-  console.error(error);
-  return null;
-});
+const cache = await caches?.open("fetch").catch(() => null);
 
 const inFuture = (maybeDate: string) => {
   try {
@@ -58,6 +56,7 @@ export const createFetch = (fetcher: typeof fetch): typeof fetch =>
     init?: DecoRequestInit,
   ) {
     const original = new Request(input, init);
+    const currentCache = Deno.env.get("DECO_CACHE_DISABLE") ? null : cache;
 
     const url = new URL(original.url);
     const cacheTtlByStatus = init?.deco?.cacheTtlByStatus ??
@@ -84,17 +83,22 @@ export const createFetch = (fetcher: typeof fetch): typeof fetch =>
 
       if (cacheable && maxAge > 0) {
         const cloned = new Response(response.clone().body, response);
+        cloned.headers.delete("cache-control");
         cloned.headers.set(
           "expires",
           new Date(Date.now() + (maxAge * 1e3)).toUTCString(),
         );
-        cache?.put(request, cloned).catch(console.error);
+        currentCache?.put(request, cloned).catch(console.error);
       }
 
       return response;
     };
 
-    const matched = await cache?.match(request);
+    const matched = await currentCache?.match(request).catch((error) => {
+      console.error(error);
+
+      return null;
+    });
 
     if (!matched) {
       const fetched = await fetchAndCache();
