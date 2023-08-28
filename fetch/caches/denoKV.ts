@@ -1,7 +1,7 @@
 import { sha1 } from "./utils.ts";
 
 interface KVData {
-  hasBody?: boolean;
+  etag: string | null;
   status: number;
   headers: [string, string][];
 }
@@ -26,79 +26,13 @@ const createIndex = (size: number, onEvict?: (key: string) => void) => {
   };
 };
 
-const createReadWriteLock = (kv: Deno.Kv, namespace: string[]) => {
-  type KVLock = number | "write" | null;
-
-  const MAX_RETRIES = 10;
-
-  const release = (key: string[], mode: "read" | "write") => {
-    for (let retry = 0; retry < MAX_RETRIES; retry++) {
-      
-    }
-  };
-
-  return {
-    acquire: async (
-      key: string,
-      mode: "read" | "write",
-    ): Promise<() => Promise<void>> => {
-      const prefix = [...namespace, key];
-
-      for (let retry = 0; retry < MAX_RETRIES; retry++) {
-        const entry = await kv.get<KVLock>(prefix);
-
-        if (entry.value === null || entry.value === 0) {
-          const res = await kv
-            .atomic()
-            .check(entry)
-            .set(prefix, mode === "read" ? 0 : "write")
-            .commit();
-
-          // someone acquired it first, retry
-          if (!res.ok) continue;
-
-          // lock acquired
-          return mode === "write"
-            ? () => kv.set(prefix, null)
-            : () => kv.atomic().sum(prefix, -1n).commit();
-        }
-
-        if (mode === "read") {
-          if (entry.value === "write") continue;
-
-          const res = await kv
-            .atomic()
-            .check(entry)
-            .set(prefix, entry.value + 1)
-            .commit();
-
-          if (!res.ok) continue;
-
-          return () => kv.atomic().sum(prefix, -1n).commit();
-        }
-
-        if (mode === "write") {
-          if (entry.value !== "write") continue;
-
-          const res = await kv
-            .atomic()
-            .check(entry)
-            .set(prefix, "write")
-            .commit();
-
-          if (!res.ok) continue;
-
-          return () => kv.set(prefix, null);
-        }
-      }
-    },
-  };
-};
-
 export const getCacheStorageKV = (): CacheStorage => {
   const NAMESPACE = "CACHES";
-  const MAX_KV_ENTRIES = 5; // 1_000;
-  const HOUSEKEEPING_INTERVAL_MS = 5_000; // 5 * 60 * 1000; // 5minutes
+  const MAX_KV_ENTRIES = 50;
+  const HOUSEKEEPING_INTERVAL_MS = 1_000; // 5 * 60 * 1000; // 5minutes
+
+  const SMALL_EXPIRE_MS = 1 * 1000; // 1second
+  const LARGE_EXPIRE_MS = 3600 * 1000; // 1hour
 
   return {
     delete: async (cacheName: string): Promise<boolean> => {
@@ -126,22 +60,19 @@ export const getCacheStorageKV = (): CacheStorage => {
     },
     open: async (cacheName: string): Promise<Cache> => {
       const kv = await Deno.openKv();
-      const lock = createReadWriteLock(kv, [NAMESPACE, "locks", cacheName]);
 
       const remove = async (key: string) => {
         const prefix = [NAMESPACE, cacheName, key];
 
+        const entry = await kv.get<KVData>(prefix);
         await kv.delete(prefix);
 
-        const release = await lock.acquire(key, "write");
-        try {
-          for await (
-            const entry of kv.list({ prefix }, { consistency: "eventual" })
-          ) {
-            await kv.delete(entry.key);
-          }
-        } finally {
-          await release();
+        const etag = entry.value?.etag;
+
+        if (!etag) return;
+
+        for await (const entry of kv.list({ prefix: [...prefix, etag] })) {
+          await kv.set(entry.key, entry.value, { expireIn: SMALL_EXPIRE_MS });
         }
       };
 
@@ -169,7 +100,7 @@ export const getCacheStorageKV = (): CacheStorage => {
         return [NAMESPACE, cacheName, key];
       };
 
-      // Runs once at every 5minutes
+      // Evicts cache
       setInterval(async () => {
         const keys = [NAMESPACE, cacheName];
 
@@ -221,58 +152,49 @@ export const getCacheStorageKV = (): CacheStorage => {
 
           const key = await keyForRequest(request);
 
-          const release = await lock.acquire(key.at(-1)!, "read");
+          const entry = await kv.get<KVData>(key, {
+            consistency: "eventual",
+          });
 
-          try {
-            const entry = await kv.get<KVData>(key, {
-              consistency: "eventual",
-            });
-
-            if (!entry.value) {
-              await release();
-
-              return;
-            }
-
-            const { headers, status, hasBody } = entry.value;
-
-            // Stream body from KV
-            let iterator = 0;
-            const MAX_KV_BATCH_SIZE = 10;
-            const body = hasBody
-              ? new ReadableStream({
-                async pull(controller) {
-                  try {
-                    const keys = new Array(MAX_KV_BATCH_SIZE)
-                      .fill(0)
-                      .map((_, index) => index + iterator)
-                      .map((chunk) => [...key, chunk]);
-
-                    const entries = await kv.getMany(keys, {
-                      consistency: "eventual",
-                    }).then((response) =>
-                      response.filter((entry) => entry.versionstamp !== null)
-                    );
-
-                    if (entries.length === 0) return controller.close();
-
-                    for (const { value } of entries) {
-                      controller.enqueue(value as Uint8Array);
-                    }
-
-                    iterator += MAX_KV_BATCH_SIZE;
-                  } catch (error) {
-                    await release();
-                    controller.error(error);
-                  }
-                },
-              })
-              : null;
-
-            return new Response(body, { headers, status });
-          } catch {
-            await release();
+          if (!entry.value) {
+            return;
           }
+
+          const { headers, status, etag } = entry.value;
+
+          // Stream body from KV
+          let iterator = 0;
+          const MAX_KV_BATCH_SIZE = 10;
+          const body = etag
+            ? new ReadableStream({
+              async pull(controller) {
+                try {
+                  const keys = new Array(MAX_KV_BATCH_SIZE)
+                    .fill(0)
+                    .map((_, index) => index + iterator)
+                    .map((chunk) => [...key, etag, chunk]);
+
+                  const entries = await kv.getMany(keys, {
+                    consistency: "eventual",
+                  }).then((response) =>
+                    response.filter((entry) => entry.versionstamp !== null)
+                  );
+
+                  if (entries.length === 0) return controller.close();
+
+                  for (const { value } of entries) {
+                    controller.enqueue(value as Uint8Array);
+                  }
+
+                  iterator += MAX_KV_BATCH_SIZE;
+                } catch (error) {
+                  controller.error(error);
+                }
+              },
+            })
+            : null;
+
+          return new Response(body, { headers, status });
         },
         /** [MDN Reference](https://developer.mozilla.org/docs/Web/API/Cache/matchAll) */
         matchAll: (
@@ -303,6 +225,9 @@ export const getCacheStorageKV = (): CacheStorage => {
 
           const key = await keyForRequest(req);
 
+          // Remove previous cache
+          const removing = remove(key.at(-1)!);
+
           // Transform 8Kb stream into 64Kb KV stream
           let accumulator = new Uint8Array();
           const KV_CHUNK_SIZE = 65536; // 64Kb
@@ -330,31 +255,33 @@ export const getCacheStorageKV = (): CacheStorage => {
 
           response.body?.pipeThrough(kvChunks);
 
-          const release = await lock.acquire(key.at(-1)!, "write");
+          // Save each file chunk
+          const etag = crypto.randomUUID();
+          const reader = kvChunks.readable.getReader();
+          for (let chunk = 0; true; chunk++) {
+            const { value, done } = await reader.read();
 
-          try {
-            // Save each chunk
-            const reader = kvChunks.readable.getReader();
-            for (let chunk = 0; true; chunk++) {
-              const { value, done } = await reader.read();
+            if (done) break;
 
-              if (done) break;
-
-              await kv.set([...key, chunk], value);
-            }
-
-            // Save initial pointer file
-            await kv.set(
-              key,
-              {
-                hasBody: Boolean(response.body),
-                status: response.status,
-                headers: [...response.headers.entries()],
-              } satisfies KVData,
-            );
-          } finally {
-            await release();
+            await kv.set([...key, etag, chunk], value, {
+              expireIn: LARGE_EXPIRE_MS + SMALL_EXPIRE_MS,
+            });
           }
+
+          await removing;
+
+          // Save file metadata
+          await kv.set(
+            key,
+            {
+              etag: response.body ? etag : null,
+              status: response.status,
+              headers: [...response.headers.entries()],
+            } satisfies KVData,
+            {
+              expireIn: LARGE_EXPIRE_MS,
+            },
+          );
         },
       };
     },

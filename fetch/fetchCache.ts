@@ -72,7 +72,7 @@ export const createFetch = (fetcher: typeof fetch): typeof fetch =>
       url.searchParams.set("__decoCacheCB", cacheKey);
     }
 
-    const request = new Request(url, { ...init, cache: undefined });
+    const request = new Request(url, init);
 
     const fetchAndCache = async () => {
       const response = await fetcher(request);
